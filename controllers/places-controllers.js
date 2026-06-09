@@ -1,12 +1,28 @@
-const fs = require('fs');
-
 const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 
 const HttpError = require('../models/http-error');
+const cloudinary = require('../util/cloudinary');
 const getCoordsForAddress = require('../util/location');
 const Place = require('../models/place');
 const User = require('../models/user');
+
+const getCloudinaryPublicId = imageUrl => {
+  if (!imageUrl) {
+    return null;
+  }
+
+  const uploadSegment = '/upload/';
+  const uploadIndex = imageUrl.indexOf(uploadSegment);
+  if (uploadIndex === -1) {
+    return null;
+  }
+
+  const publicIdWithVersion = imageUrl.slice(uploadIndex + uploadSegment.length);
+  const versionlessPublicId = publicIdWithVersion.replace(/^v\d+\//, '');
+
+  return versionlessPublicId.replace(/\.[^/.]+$/, '');
+};
 
 const getPlaceById = async (req, res, next) => {
   const placeId = req.params.pid;
@@ -85,6 +101,7 @@ const createPlace = async (req, res, next) => {
     address,
     location: coordinates,
     image: req.file.path,
+    imagePublicId: req.file.filename,
     creator: req.userData.userId
   });
 
@@ -194,7 +211,7 @@ const deletePlace = async (req, res, next) => {
     return next(error);
   }
 
-  const imagePath = place.image;
+  const imagePublicId = place.imagePublicId || getCloudinaryPublicId(place.image);
 
   try {
     const sess = await mongoose.startSession();
@@ -211,9 +228,15 @@ const deletePlace = async (req, res, next) => {
     return next(error);
   }
 
-  fs.unlink(imagePath, err => {
-    console.log(err);
-  });
+  if (imagePublicId) {
+    try {
+      await cloudinary.uploader.destroy(imagePublicId, {
+        resource_type: 'image'
+      });
+    } catch (err) {
+      console.log(err);
+    }
+  }
 
   res.status(200).json({ message: 'Deleted place.' });
 };
