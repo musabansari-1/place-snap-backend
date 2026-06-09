@@ -49,6 +49,25 @@ const getPlaceById = async (req, res, next) => {
   res.json({ place: place.toObject({ getters: true }) });
 };
 
+const getAllPlaces = async (req, res, next) => {
+  let places;
+  try {
+    places = await Place.find()
+      .populate('creator', 'name image')
+      .sort({ createdAt: -1, _id: -1 });
+  } catch (err) {
+    const error = new HttpError(
+      'Fetching places failed, please try again later.',
+      500
+    );
+    return next(error);
+  }
+
+  res.json({
+    places: places.map(place => place.toObject({ getters: true }))
+  });
+};
+
 const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.uid;
 
@@ -242,6 +261,7 @@ const deletePlace = async (req, res, next) => {
 };
 
 exports.getPlaceById = getPlaceById;
+exports.getAllPlaces = getAllPlaces;
 exports.getPlacesByUserId = getPlacesByUserId;
 exports.createPlace = createPlace;
 exports.updatePlace = updatePlace;
